@@ -10,6 +10,12 @@
 #define DECL(x) x
 #endif
 
+#if defined(__ARM_FEATURE_BTI_DEFAULT)
+#define BTI_C bti c
+#else
+#define BTI_C
+#endif
+
 /* X25519-AArch64 by Emil Lenngren (2018)
  *
  * To the extent possible under law, the person who associated CC0 with
@@ -40,6 +46,7 @@
 	.global	DECL(mx25519_scalarmult_arm64)
 	//.type	mx25519_scalarmult_arm64, %function
 DECL(mx25519_scalarmult_arm64):
+	BTI_C
 	stp	x29, x30, [sp, #-160]!
 	mov	x29, sp
 	stp	x19, x20, [sp, #16]
@@ -1629,3 +1636,21 @@ invtable:
 	.hword	  5|       (1<<9)
 	.hword	  0|       (0<<9)
 	//.size	invtable, .-invtable
+
+#if defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
+#if defined(__ARM_FEATURE_BTI_DEFAULT)
+.section .note.gnu.property,"a"
+.align 3
+.long 1f - 0f
+.long 4f - 1f
+.long 5
+0: .asciz "GNU"
+1: .align 3
+.long 0xc0000000
+.long 3f - 2f
+2: .long 1
+3: .align 3
+4:
+#endif
+#endif
