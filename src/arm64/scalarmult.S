@@ -44,7 +44,9 @@
 	// in: x1: scalar pointer, x2: base point pointer
 	// out: x0: result pointer
 	.global	DECL(mx25519_scalarmult_arm64)
-	//.type	mx25519_scalarmult_arm64, %function
+#if defined(__ELF__)
+	.type	DECL(mx25519_scalarmult_arm64), %function
+#endif
 DECL(mx25519_scalarmult_arm64):
 	BTI_C
 	stp	x29, x30, [sp, #-160]!
@@ -1614,7 +1616,9 @@ mov	v10.d[0], v0.d[1]
 	ldp	x29, x30, [sp], #160
 
 	ret
-	//.size	mx25519_scalarmult_arm64, .-mx25519_scalarmult_arm64
+#if defined(__ELF__)
+	.size	DECL(mx25519_scalarmult_arm64), .-DECL(mx25519_scalarmult_arm64)
+#endif
 
 	//.type	invtable, %object
 invtable:

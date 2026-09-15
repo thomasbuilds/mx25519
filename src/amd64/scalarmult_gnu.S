@@ -26,6 +26,14 @@
 #define CET_ENDBR
 #endif
 
+#if defined(__ELF__)
+#define FUNC_TYPE(x) .type DECL(x), @function
+#define FUNC_SIZE(x) .size DECL(x), . - DECL(x)
+#else
+#define FUNC_TYPE(x)
+#define FUNC_SIZE(x)
+#endif
+
 .global DECL(mx25519_scalarmult_amd64x)
 .global DECL(mx25519_scalarmult_amd64)
 
@@ -35,6 +43,7 @@ ALIGN 32
 #include "gcd_table.inc"
 
 ALIGN 32
+FUNC_TYPE(mx25519_scalarmult_amd64x)
 DECL(mx25519_scalarmult_amd64x):
   CET_ENDBR
 #ifdef WINABI
@@ -75,8 +84,10 @@ DECL(mx25519_scalarmult_amd64x):
 #endif
 
   ret
+FUNC_SIZE(mx25519_scalarmult_amd64x)
 
 ALIGN 32
+FUNC_TYPE(mx25519_scalarmult_amd64)
 DECL(mx25519_scalarmult_amd64):
   CET_ENDBR
 #ifdef WINABI
@@ -95,6 +106,7 @@ DECL(mx25519_scalarmult_amd64):
 #endif
 
   ret
+FUNC_SIZE(mx25519_scalarmult_amd64)
 
 #if defined(__ELF__)
 .section .note.GNU-stack,"",%progbits
