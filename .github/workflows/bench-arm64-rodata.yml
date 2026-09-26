@@ -1,0 +1,42 @@
+name: bench arm64 rodata
+on: push
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Machine
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string 2>/dev/null || lscpu | grep -iE "model name|vendor" || true
+          cc --version | head -1
+      - name: Build master and the change
+        run: |
+          command -v cmake || (sudo apt-get update && sudo apt-get install -y cmake)
+          git worktree add /tmp/src-master origin/master
+          git worktree add /tmp/src-change HEAD~1
+          git worktree add /tmp/src-control origin/master
+          cp bench/control.S /tmp/src-control/src/arm64/scalarmult.S
+          echo "master: $(git -C /tmp/src-master log -1 --format='%h %s')"
+          echo "change: $(git -C /tmp/src-change log -1 --format='%h %s')"
+          echo "control: master plus mov/movk inside the ladder loop (+794 instructions per call, 0.29%; the change is +32, 0.012%)"
+          git diff --stat origin/master HEAD~1
+          for v in master change control; do
+            cmake -S /tmp/src-$v -B /tmp/b-$v -DCMAKE_BUILD_TYPE=Release > /dev/null
+            cmake --build /tmp/b-$v --target mx25519-tests mx25519-bench
+            echo "$v tests: $(/tmp/b-$v/mx25519-tests | grep -c PASSED) passed, $(/tmp/b-$v/mx25519-tests | tail -1)"
+          done
+      - name: Benchmark (interleaved, alternating order)
+        run: |
+          PIN=""; command -v taskset > /dev/null && PIN="taskset -c 1"
+          for i in $(seq 1 25); do
+            case $((i % 3)) in 0) order="master change control";; 1) order="change control master";; *) order="control master change";; esac
+            for v in $order; do echo "$v $($PIN /tmp/b-$v/mx25519-bench | awk '/bench_arm64/ {print $3}')"; done
+          done | tee bench.txt
+          python3 bench/stats.py bench.txt
