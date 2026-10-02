@@ -69,6 +69,66 @@ static const char test_sc9[] = "010000000000000000000000000000000000000000000000
 static const char test_pt9[] = "a5cdcf951bc1b54ae8e42d8b14ad25e9db85a0faeb8e990e9b94e471cc7e887b";
 static const char test_re9[] = "a5cdcf951bc1b54ae8e42d8b14ad25e9db85a0faeb8e990e9b94e471cc7e887b";
 
+/* inputs reaching rare carries and borrows of the field arithmetic */
+static const char* const carry_vectors[][3] = {
+    /* scalar 1, point 2^255-21 */
+    {"0100000000000000000000000000000000000000000000000000000000000000",
+     "ebffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "ebffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+    /* scalar 1, point 2^128-1 */
+    {"0100000000000000000000000000000000000000000000000000000000000000",
+     "ffffffffffffffffffffffffffffffff00000000000000000000000000000000",
+     "ffffffffffffffffffffffffffffffff00000000000000000000000000000000"},
+    /* scalar 1, point 2^64-20 */
+    {"0100000000000000000000000000000000000000000000000000000000000000",
+     "ecffffffffffffff000000000000000000000000000000000000000000000000",
+     "ecffffffffffffff000000000000000000000000000000000000000000000000"},
+    /* scalar 1, point 2^255-2^127-2 */
+    {"0100000000000000000000000000000000000000000000000000000000000000",
+     "feffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffff7f",
+     "feffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffff7f"},
+    /* scalar 1, point 2^255-2^192-19 */
+    {"0100000000000000000000000000000000000000000000000000000000000000",
+     "edfffffffffffffffffffffffffffffffffffffffffffffffeffffffffffff7f",
+     "edfffffffffffffffffffffffffffffffffffffffffffffffeffffffffffff7f"},
+    /* scalar 2, point 2^255-35 */
+    {"0200000000000000000000000000000000000000000000000000000000000000",
+     "ddffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "cf1b0c47e22b394a3aae005c7718160d29a91326e85a85cd1306edada4f1e65f"},
+    /* scalar 5, point 2^255-83 */
+    {"0500000000000000000000000000000000000000000000000000000000000000",
+     "adffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "1a1120bff585af8ac38b0dd6edff55adc81a663d98ef13bd66c304a20eeb2a7c"},
+    /* scalar 5, point 2^255-31 */
+    {"0500000000000000000000000000000000000000000000000000000000000000",
+     "e1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "f15016c7df7d85ba1e6fcb0bbc1707034f790058e1de3a6f46f31b2ddabd8325"},
+    /* RFC 7748 scalar 1 clamped, point 2^255-24 */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "e8ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "09b692ccedf8f926cf7798a0a81969f05a9e644640c570eb72fb1b9427cc2774"},
+    /* RFC 7748 scalar 1 clamped, point 2^255-2^224-15 */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "f1fffffffffffffffffffffffffffffffffffffffffffffffffffffffeffff7f",
+     "16c082873321599c65e52cf2b0046f21acc1b9bcaa275ef17d760b6ddd42ae7d"},
+    /* RFC 7748 scalar 1 clamped, point 2^127 */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "0000000000000000000000000000008000000000000000000000000000000000",
+     "ff4c6f9e545c8e8d04f290a2211f0e06d16e6517b564353dc25596ad42094351"},
+    /* RFC 7748 scalar 1 clamped, point 2 */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "0200000000000000000000000000000000000000000000000000000000000000",
+     "71cacba0b65daf53ddf9c21fb434bc58ee5cfa3954d1b642fc5155048f03466f"},
+    /* RFC 7748 scalar 1 clamped, 121666 * T3 carries through every 64-bit limb at the first ladder step */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "f1ffffffffffffff67720e37c5f042dd67720e37c5f042dd67720e37c5f0427d",
+     "e5e16772c8145dd28617c3524e670eeb8a043afc469982c25e03eb775fbc6e2d"},
+    /* RFC 7748 scalar 1 clamped, X2 - Z2 = 1 - 2^192 at the second ladder step */
+    {"a046e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449a44",
+     "73945343845cc6be2833f18e1029759ea70451a3bc35c53fd18a39ff3d42b206",
+     "4acccdf15f8352b860c5af99b3ffd8beb8b7b1432588165af9e957be211e2c70"}
+};
+
 /* DH key exchange tests */
 static const char rfc7748_alice_priv[] = "77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a";
 static const char rfc7748_alice_pub[] = "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a";
@@ -162,6 +222,12 @@ static void check_dh() {
     assert(equals_hex(&bob_shared, rfc7748_shared));
 }
 
+static void check_carries() {
+    for (size_t i = 0; i < sizeof(carry_vectors) / sizeof(carry_vectors[0]); ++i) {
+        assert(check_scmul_unclamped(carry_vectors[i][0], carry_vectors[i][1], carry_vectors[i][2], &no_clamping));
+    }
+}
+
 static bool test_select_auto() {
     impl = mx25519_select_impl(MX25519_TYPE_AUTO);
     assert(impl != NULL);
@@ -223,6 +289,11 @@ static bool test_scmul8_portable() {
 
 static bool test_scmul9_portable() {
     assert(check_scmul_unclamped(test_sc9, test_pt9, test_re9, &no_clamping));
+    return true;
+}
+
+static bool test_carries_portable() {
+    check_carries();
     return true;
 }
 
@@ -329,6 +400,14 @@ static bool test_scmul9_arm64() {
         return false;
     }
     assert(check_scmul_unclamped(test_sc9, test_pt9, test_re9, &no_clamping));
+    return true;
+}
+
+static bool test_carries_arm64() {
+    if (impl == NULL) {
+        return false;
+    }
+    check_carries();
     return true;
 }
 
@@ -441,6 +520,14 @@ static bool test_scmul9_amd64() {
     return true;
 }
 
+static bool test_carries_amd64() {
+    if (impl == NULL) {
+        return false;
+    }
+    check_carries();
+    return true;
+}
+
 static bool test_dh_amd64() {
     if (impl == NULL) {
         return false;
@@ -550,6 +637,14 @@ static bool test_scmul9_amd64x() {
     return true;
 }
 
+static bool test_carries_amd64x() {
+    if (impl == NULL) {
+        return false;
+    }
+    check_carries();
+    return true;
+}
+
 static bool test_dh_amd64x() {
     if (impl == NULL) {
         return false;
@@ -586,6 +681,7 @@ int main() {
     RUN_TEST(test_scmul7_portable);
     RUN_TEST(test_scmul8_portable);
     RUN_TEST(test_scmul9_portable);
+    RUN_TEST(test_carries_portable);
     RUN_TEST(test_dh_portable);
     RUN_TEST(test_mul_base_times1_portable);
     RUN_TEST(test_select_arm64);
@@ -599,6 +695,7 @@ int main() {
     RUN_TEST(test_scmul7_arm64);
     RUN_TEST(test_scmul8_arm64);
     RUN_TEST(test_scmul9_arm64);
+    RUN_TEST(test_carries_arm64);
     RUN_TEST(test_dh_arm64);
     RUN_TEST(test_mul_base_times1_arm64);
     RUN_TEST(test_select_amd64);
@@ -612,6 +709,7 @@ int main() {
     RUN_TEST(test_scmul7_amd64);
     RUN_TEST(test_scmul8_amd64);
     RUN_TEST(test_scmul9_amd64);
+    RUN_TEST(test_carries_amd64);
     RUN_TEST(test_dh_amd64);
     RUN_TEST(test_mul_base_times1_amd64);
     RUN_TEST(test_select_amd64x);
@@ -625,6 +723,7 @@ int main() {
     RUN_TEST(test_scmul7_amd64x);
     RUN_TEST(test_scmul8_amd64x);
     RUN_TEST(test_scmul9_amd64x);
+    RUN_TEST(test_carries_amd64x);
     RUN_TEST(test_dh_amd64x);
     RUN_TEST(test_mul_base_times1_amd64x);
 
