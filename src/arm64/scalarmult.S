@@ -1268,7 +1268,6 @@ mov	v10.d[0], v0.d[1]
 	add	x4, x4, x3, lsr #25
 	and	x3, x3, #0x1ffffff
 	add	x5, x5, x4, lsr #26
-	and	x4, x4, #0x3ffffff
 	add	x6, x6, x5, lsr #25
 	and	x5, x5, #0x1ffffff
 	add	x7, x7, x6, lsr #26
@@ -1468,8 +1467,6 @@ mov	v10.d[0], v0.d[1]
 	add	x4, x7, x3, lsr #25
 	and	x3, x3, #0x1ffffff
 	add	x5, x6, x4, lsr #26
-	and	x4, x4, #0x3ffffff
-	and	x5, x5, #0x3ffffff
 
 	mov	w6, w24
 	lsr	x7, x24, #32
