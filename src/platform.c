@@ -45,7 +45,7 @@ uint64_t mx25519_cpu_cycles() {
         return __rdtsc();
     }
 #endif
-#if defined(PLATFORM_ARM64)
+#if defined(PLATFORM_ARM64) && (defined(__GNUC__) || defined(__clang__))
     uint64_t vct;
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(vct));
     return vct;

@@ -5,6 +5,8 @@ This library provides four constant-time implementations of scalar multiplicatio
 3. **AMD64** is an optimized assembly implementation for 64-bit x86 CPUs. It uses 64-bit limbs.
 4. **AMD64X** is an optimized assembly implementation targeting AMD Ryzen, Intel Broadwell and newer CPUs. It uses 64-bit limbs and the safegcd inversion.
 
+The assembly implementations are built for x86-64 and for little-endian AArch64 with 64-bit pointers. Other targets, including x32, big-endian AArch64 and MSVC targeting ARM64, use the portable implementation.
+
 A specific implementation can be selected at runtime using the [API](include/mx25519.h). Passing the `MX25519_TYPE_AUTO` flag automatically selects the fastest available implementation supported by the current machine.
 
 **Important note**: This library does not perform internal clamping of the private key as specified in [RFC 7748](https://www.rfc-editor.org/info/rfc7748). This is a deliberate design choice to allow use-cases that require unclamped private keys (for example [Carrot](https://github.com/jeffro256/carrot/blob/master/carrot.md)). It is the caller's responsibility to clamp the private key as needed before calling `mx25519_scmul_base_unclamped` or `mx25519_scmul_key_unclamped`.

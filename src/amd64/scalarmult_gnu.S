@@ -4,6 +4,9 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include "../backends.h"
+
+#if defined(IMPL_AMD64)
 .intel_syntax noprefix
 #if defined(__APPLE__)
 .text
@@ -136,4 +139,7 @@ ALIGN 8
 3: ALIGN 8
 4:
 #endif
+#endif
+#elif defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
 #endif

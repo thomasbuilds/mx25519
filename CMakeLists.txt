@@ -55,8 +55,37 @@ else()
 message(STATUS "Assembly backends (MPL-2.0): disabled")
 endif()
 
-# AMD64
-if(MX25519_COPYLEFT AND (CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STREQUAL "x86-64" OR ARCH_ID STREQUAL "amd64"))
+# Assembly backends. src/backends.h decides from compiler macros, and the GNU
+# sources assemble to nothing where it says no. Here we only pick the sources
+# to build; a backend left out is reported to the C code, so a wrong guess
+# costs speed instead of breaking the link.
+set(mx25519_asm_amd64 OFF)
+set(mx25519_asm_arm64 OFF)
+if(MX25519_COPYLEFT)
+  if(MSVC)
+    # cl and clang-cl: the x64 MASM source only (not ARM64 or ARM64EC)
+    if(CMAKE_C_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
+      set(mx25519_asm_amd64 ON)
+    endif()
+  elseif(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    # each slice uses its own source and assembles the other one to nothing
+    if(CMAKE_OSX_ARCHITECTURES MATCHES "(^|;)x86_64h?(;|$)")
+      set(mx25519_asm_amd64 ON)
+    endif()
+    if(CMAKE_OSX_ARCHITECTURES MATCHES "(^|;)arm64e?(;|$)")
+      set(mx25519_asm_arm64 ON)
+    endif()
+  elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    if(ARCH_ID MATCHES "^(x86_64|x86-64|amd64|x64|em64t)$")
+      set(mx25519_asm_amd64 ON)
+    elseif(ARM_ID MATCHES "^(aarch64|arm64|arm64e|armv8-a)$")
+      set(mx25519_asm_arm64 ON)
+    endif()
+  endif()
+  message(STATUS "Assembly sources: AMD64 ${mx25519_asm_amd64}, ARM64 ${mx25519_asm_arm64}")
+endif()
+
+if(mx25519_asm_amd64)
   if(MSVC)
     enable_language(ASM_MASM)
     list(APPEND mx25519_sources src/amd64/scalarmult_masm.asm)
@@ -66,13 +95,16 @@ if(MX25519_COPYLEFT AND (CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86
     set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY LANGUAGE C)
     set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
   endif()
+else()
+  list(APPEND mx25519_definitions MX25519_NO_ASM_AMD64)
 endif()
 
-# ARM64
-if(MX25519_COPYLEFT AND (ARM_ID STREQUAL "aarch64" OR ARM_ID STREQUAL "arm64" OR ARM_ID STREQUAL "armv8-a"))
+if(mx25519_asm_arm64)
   list(APPEND mx25519_sources src/arm64/scalarmult.S)
   set_property(SOURCE src/arm64/scalarmult.S PROPERTY LANGUAGE C)
   set_property(SOURCE src/arm64/scalarmult.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
+else()
+  list(APPEND mx25519_definitions MX25519_NO_ASM_ARM64)
 endif()
 
 set(MX25519_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include" CACHE STRING "mx25519 include path")
@@ -96,6 +128,9 @@ target_compile_definitions(mx25519_static PUBLIC MX25519_STATIC)
 if(NOT MX25519_COPYLEFT)
   target_compile_definitions(mx25519 PRIVATE MX25519_NO_COPYLEFT)
   target_compile_definitions(mx25519_static PRIVATE MX25519_NO_COPYLEFT)
+elseif(mx25519_definitions)
+  target_compile_definitions(mx25519 PRIVATE ${mx25519_definitions})
+  target_compile_definitions(mx25519_static PRIVATE ${mx25519_definitions})
 endif()
 
 add_executable(mx25519-tests

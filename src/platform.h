@@ -30,13 +30,7 @@
 #define PLATFORM_ARM64
 #endif
 
-#if !defined(MX25519_NO_COPYLEFT)
-#if defined(PLATFORM_ARM64)
-#define IMPL_ARM64
-#elif defined(PLATFORM_AMD64)
-#define IMPL_AMD64
-#endif
-#endif
+#include "backends.h"
 
 #ifdef _MSC_VER
 #pragma warning(error: 4013) /* calls to undefined functions */

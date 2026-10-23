@@ -5,6 +5,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
+#include "../backends.h"
+
+#if defined(IMPL_ARM64)
+
 #if defined(__APPLE__)
 #define DECL(x) _##x
 #else
@@ -1645,4 +1649,7 @@ mov	v10.d[0], v0.d[1]
 3: .align 3
 4:
 #endif
+#endif
+#elif defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
 #endif
