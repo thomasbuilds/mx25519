@@ -24,7 +24,8 @@
 
 #if defined(_M_IX86) || defined(__i386)
 #define PLATFORM_X86
-#elif defined(_M_X64) || defined(__x86_64__)
+#elif (defined(_M_X64) || defined(__x86_64__)) \
+    && !defined(_M_ARM64EC) && !defined(__arm64ec__)
 #define PLATFORM_AMD64
 #elif defined(_M_ARM64) || defined(__aarch64__)
 #define PLATFORM_ARM64

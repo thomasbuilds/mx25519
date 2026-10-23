@@ -1650,6 +1650,6 @@ mov	v10.d[0], v0.d[1]
 4:
 #endif
 #endif
-#elif defined(__ELF__)
-.section .note.GNU-stack,"",%progbits
+#else
+#include "../elf_notes.inc"
 #endif

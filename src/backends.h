@@ -17,22 +17,26 @@
 #define BACKENDS_H
 
 /*
- * Decides which assembly backend the target can use. Preprocessor only, so
- * the GNU assembly sources include it too and assemble to nothing on any
- * target the C code would not call them on.
+ * Decides which assembly backend the target can use. Preprocessor only:
+ * CMake compiles it to decide which assembly sources to build, and the GNU
+ * assembly sources include it and assemble to nothing on any target the C
+ * code would not call them on.
  *
  * MX25519_NO_ASM_AMD64 and MX25519_NO_ASM_ARM64 tell the C code that the
  * build did not include that backend's assembly source.
  */
 
 #if !defined(MX25519_NO_COPYLEFT)
-/* x86-64 with 64-bit pointers: not x32, not ARM64EC */
+/* x86-64 with 64-bit pointers: not x32, and not ARM64EC, which also defines
+   __x86_64__ or _M_X64 */
 #if ((defined(__x86_64__) && !defined(__ILP32__)) || defined(_M_X64)) \
-    && !defined(_M_ARM64EC) && !defined(MX25519_NO_ASM_AMD64)
+    && !defined(__arm64ec__) && !defined(_M_ARM64EC) \
+    && !defined(MX25519_NO_ASM_AMD64)
 #define IMPL_AMD64
-/* little-endian AArch64 with 64-bit pointers, GNU-style assembler only */
+/* little-endian AArch64 with 64-bit pointers (cl.exe defines _M_ARM64 but
+   not __aarch64__, and cannot build the GNU assembly source) */
 #elif defined(__aarch64__) && defined(__AARCH64EL__) && !defined(__ILP32__) \
-    && !defined(_MSC_VER) && !defined(MX25519_NO_ASM_ARM64)
+    && !defined(MX25519_NO_ASM_ARM64)
 #define IMPL_ARM64
 #endif
 #endif

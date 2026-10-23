@@ -140,6 +140,6 @@ ALIGN 8
 4:
 #endif
 #endif
-#elif defined(__ELF__)
-.section .note.GNU-stack,"",%progbits
+#else
+#include "../elf_notes.inc"
 #endif

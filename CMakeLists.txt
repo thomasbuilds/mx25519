@@ -30,24 +30,10 @@ src/mx25519.c)
 
 option(MX25519_COPYLEFT "Include the MPL-2.0 licensed assembly backends (ARM64, AMD64, AMD64X)" ON)
 
-if(NOT ARCH_ID)
-  # allow cross compiling
-  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "")
-    set(CMAKE_SYSTEM_PROCESSOR ${CMAKE_HOST_SYSTEM_PROCESSOR})
-  endif()
-  string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" ARCH_ID)
-endif()
-
-if(NOT ARM_ID)
-  set(ARM_ID "${ARCH_ID}")
-endif()
-
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
   message(STATUS "Setting default build type: ${CMAKE_BUILD_TYPE}")
 endif()
-
-message(STATUS "Build architecture: ${ARCH_ID}")
 
 if(MX25519_COPYLEFT)
 message(STATUS "Assembly backends (MPL-2.0): enabled")
@@ -55,56 +41,78 @@ else()
 message(STATUS "Assembly backends (MPL-2.0): disabled")
 endif()
 
-# Assembly backends. src/backends.h decides from compiler macros, and the GNU
-# sources assemble to nothing where it says no. Here we only pick the sources
-# to build; a backend left out is reported to the C code, so a wrong guess
-# costs speed instead of breaking the link.
+# Assembly backends. src/backends.h decides from the compiler's predefined
+# macros which backend the C code calls, and the GNU assembly sources include
+# it and assemble to nothing where it says no. CMake compiles the same header
+# with the same compiler and flags to choose the sources to build. A source
+# left out is reported to the C code, which then uses the portable backend.
+include(CheckCSourceCompiles)
+include(CMakePushCheckState)
+
+function(mx25519_check_impl impl result)
+  # nothing but the compiler and its flags (a parent project's check settings
+  # are not ours), and compile only, so that cross toolchains without
+  # libraries work too
+  cmake_reset_check_state()
+  set(CMAKE_REQUIRED_QUIET ON)
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+  # check again on every configure, in case the compiler flags changed
+  unset(${result} CACHE)
+  check_c_source_compiles("#include \"${CMAKE_CURRENT_SOURCE_DIR}/src/backends.h\"
+#ifndef ${impl}
+#error ${impl} is not defined
+#endif
+int main(void) { return 0; }" ${result})
+endfunction()
+
+set(mx25519_definitions)
 set(mx25519_asm_amd64 OFF)
 set(mx25519_asm_arm64 OFF)
-if(MX25519_COPYLEFT)
-  if(MSVC)
-    # cl and clang-cl: the x64 MASM source only (not ARM64 or ARM64EC)
-    if(CMAKE_C_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
+if(NOT MX25519_COPYLEFT)
+  list(APPEND mx25519_definitions MX25519_NO_COPYLEFT)
+else()
+  list(LENGTH CMAKE_OSX_ARCHITECTURES mx25519_osx_arch_count)
+  if(APPLE AND (CMAKE_GENERATOR STREQUAL "Xcode" OR mx25519_osx_arch_count GREATER 1))
+    # Xcode picks the architectures at build time, or there are several:
+    # each architecture compiles both sources and assembles only its own
+    set(mx25519_asm_amd64 ON)
+    set(mx25519_asm_arm64 ON)
+  else()
+    mx25519_check_impl(IMPL_AMD64 MX25519_HAVE_IMPL_AMD64)
+    if(MX25519_HAVE_IMPL_AMD64)
       set(mx25519_asm_amd64 ON)
     endif()
-  elseif(APPLE AND CMAKE_OSX_ARCHITECTURES)
-    # each slice uses its own source and assembles the other one to nothing
-    if(CMAKE_OSX_ARCHITECTURES MATCHES "(^|;)x86_64h?(;|$)")
-      set(mx25519_asm_amd64 ON)
-    endif()
-    if(CMAKE_OSX_ARCHITECTURES MATCHES "(^|;)arm64e?(;|$)")
-      set(mx25519_asm_arm64 ON)
-    endif()
-  elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    if(ARCH_ID MATCHES "^(x86_64|x86-64|amd64|x64|em64t)$")
-      set(mx25519_asm_amd64 ON)
-    elseif(ARM_ID MATCHES "^(aarch64|arm64|arm64e|armv8-a)$")
-      set(mx25519_asm_arm64 ON)
+    # cl cannot assemble the GNU source, and Visual Studio compiles it as C
+    if(NOT MSVC)
+      mx25519_check_impl(IMPL_ARM64 MX25519_HAVE_IMPL_ARM64)
+      if(MX25519_HAVE_IMPL_ARM64)
+        set(mx25519_asm_arm64 ON)
+      endif()
     endif()
   endif()
   message(STATUS "Assembly sources: AMD64 ${mx25519_asm_amd64}, ARM64 ${mx25519_asm_arm64}")
-endif()
 
-if(mx25519_asm_amd64)
-  if(MSVC)
-    enable_language(ASM_MASM)
-    list(APPEND mx25519_sources src/amd64/scalarmult_masm.asm)
-    set_property(SOURCE src/amd64/scalarmult_masm.asm PROPERTY LANGUAGE ASM_MASM)
+  if(mx25519_asm_amd64)
+    if(MSVC)
+      enable_language(ASM_MASM)
+      list(APPEND mx25519_sources src/amd64/scalarmult_masm.asm)
+      set_property(SOURCE src/amd64/scalarmult_masm.asm PROPERTY LANGUAGE ASM_MASM)
+    else()
+      list(APPEND mx25519_sources src/amd64/scalarmult_gnu.S)
+      set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY LANGUAGE C)
+      set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
+    endif()
   else()
-    list(APPEND mx25519_sources src/amd64/scalarmult_gnu.S)
-    set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY LANGUAGE C)
-    set_property(SOURCE src/amd64/scalarmult_gnu.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
+    list(APPEND mx25519_definitions MX25519_NO_ASM_AMD64)
   endif()
-else()
-  list(APPEND mx25519_definitions MX25519_NO_ASM_AMD64)
-endif()
 
-if(mx25519_asm_arm64)
-  list(APPEND mx25519_sources src/arm64/scalarmult.S)
-  set_property(SOURCE src/arm64/scalarmult.S PROPERTY LANGUAGE C)
-  set_property(SOURCE src/arm64/scalarmult.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
-else()
-  list(APPEND mx25519_definitions MX25519_NO_ASM_ARM64)
+  if(mx25519_asm_arm64)
+    list(APPEND mx25519_sources src/arm64/scalarmult.S)
+    set_property(SOURCE src/arm64/scalarmult.S PROPERTY LANGUAGE C)
+    set_property(SOURCE src/arm64/scalarmult.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
+  else()
+    list(APPEND mx25519_definitions MX25519_NO_ASM_ARM64)
+  endif()
 endif()
 
 set(MX25519_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include" CACHE STRING "mx25519 include path")
@@ -125,10 +133,7 @@ target_include_directories(mx25519_static
 set_target_properties(mx25519_static PROPERTIES OUTPUT_NAME mx25519)
 target_compile_definitions(mx25519_static PUBLIC MX25519_STATIC)
 
-if(NOT MX25519_COPYLEFT)
-  target_compile_definitions(mx25519 PRIVATE MX25519_NO_COPYLEFT)
-  target_compile_definitions(mx25519_static PRIVATE MX25519_NO_COPYLEFT)
-elseif(mx25519_definitions)
+if(mx25519_definitions)
   target_compile_definitions(mx25519 PRIVATE ${mx25519_definitions})
   target_compile_definitions(mx25519_static PRIVATE ${mx25519_definitions})
 endif()

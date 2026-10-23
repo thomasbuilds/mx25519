@@ -22,6 +22,8 @@ jobs:
           cmake -S . -B build
           cmake --build build
           ./build/mx25519-tests
+          nm build/libmx25519.a > symbols.txt
+          grep 'T mx25519_scalarmult_amd64x' symbols.txt
 
       - name: Build & test (portable only)
         run: |
@@ -30,6 +32,13 @@ jobs:
           ./build-portable/mx25519-tests
           nm build-portable/libmx25519.a build-portable/libmx25519.so > symbols.txt
           if grep 'mx25519_scalarmult_amd64' symbols.txt; then exit 1; fi
+
+      - name: Build (x32)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-multilib
+          cmake -S . -B build-x32 -DCMAKE_C_FLAGS=-mx32
+          cmake --build build-x32
 
       - name: Build & test (sanitizers)
         run: |
@@ -69,7 +78,10 @@ jobs:
                 build-essential cmake &&
               cmake -S . -B build &&
               cmake --build build &&
-              ./build/mx25519-tests
+              ./build/mx25519-tests &&
+              if [ ${{ matrix.arch }} = arm64 ]; then
+                nm build/libmx25519.a | grep 'T mx25519_scalarmult_arm64'
+              fi
             "
 
   macos:
@@ -83,6 +95,12 @@ jobs:
           cmake -S . -B build
           cmake --build build
           ./build/mx25519-tests
+          nm build/libmx25519.a > symbols.txt
+          if [ "$(uname -m)" = arm64 ]; then
+            grep 'T _mx25519_scalarmult_arm64' symbols.txt
+          else
+            grep 'T _mx25519_scalarmult_amd64x' symbols.txt
+          fi
 
       - name: Build & test (portable only)
         run: |
@@ -91,6 +109,19 @@ jobs:
           ./build-portable/mx25519-tests
           nm build-portable/libmx25519.a build-portable/libmx25519.dylib > symbols.txt
           if grep 'mx25519_scalarmult_arm64' symbols.txt; then exit 1; fi
+
+      - name: Build & test (universal)
+        run: |
+          cmake -S . -B build-universal -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build build-universal
+          ./build-universal/mx25519-tests
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            arch -x86_64 ./build-universal/mx25519-tests
+          fi
+          nm -arch arm64 build-universal/libmx25519.a > symbols-arm64.txt
+          nm -arch x86_64 build-universal/libmx25519.a > symbols-x86_64.txt
+          grep 'T _mx25519_scalarmult_arm64' symbols-arm64.txt
+          grep 'T _mx25519_scalarmult_amd64x' symbols-x86_64.txt
 
   windows-msvc:
     name: Windows (MSVC)
@@ -105,7 +136,10 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Run tests
-        run: .\build\Release\mx25519-tests.exe
+        run: |
+          .\build\Release\mx25519-tests.exe | Tee-Object -FilePath tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path tests.log -Pattern 'test_scmul_amd64 +\.\.\. PASSED' -Quiet)) { exit 1 }
 
   windows-gcc:
     name: Windows (GCC)
@@ -120,4 +154,7 @@ jobs:
         run: cmake --build build
 
       - name: Run tests
-        run: .\build\mx25519-tests.exe
+        run: |
+          .\build\mx25519-tests.exe | Tee-Object -FilePath tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path tests.log -Pattern 'test_scmul_amd64 +\.\.\. PASSED' -Quiet)) { exit 1 }
