@@ -5,7 +5,7 @@ This library provides four constant-time implementations of scalar multiplicatio
 3. **AMD64** is an optimized assembly implementation for 64-bit x86 CPUs. It uses 64-bit limbs.
 4. **AMD64X** is an optimized assembly implementation targeting AMD Ryzen, Intel Broadwell and newer CPUs. It uses 64-bit limbs and the safegcd inversion.
 
-The assembly implementations are built when the C compiler targets x86-64 or little-endian AArch64 with 64-bit pointers. The build asks the compiler, so cross builds need no extra settings, and CMake prints the result (`Assembly sources: ...`). Other targets use the portable implementation, including x32, big-endian AArch64, AArch64 with 32-bit pointers (such as watchOS `arm64_32`) and Windows ARM64EC. Windows ARM64 builds with cl or clang-cl also use the portable implementation.
+The assembly implementations are built when the C compiler targets x86-64 or little-endian AArch64 with 64-bit pointers. The build asks the compiler, using the toolchain settings and `CMAKE_C_FLAGS`, so cross builds need no extra settings, and CMake prints the result (`Assembly sources: ...`). Other targets use the portable implementation, including x32, big-endian AArch64, AArch64 with 32-bit pointers (such as watchOS `arm64_32`) and Windows ARM64EC. Windows ARM64 builds with cl, or with clang-cl under a Visual Studio generator, also use the portable implementation.
 
 A specific implementation can be selected at runtime using the [API](include/mx25519.h). Passing the `MX25519_TYPE_AUTO` flag automatically selects the fastest available implementation supported by the current machine.
 

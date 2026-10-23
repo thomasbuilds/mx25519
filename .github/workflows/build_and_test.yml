@@ -39,6 +39,21 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-multilib
           cmake -S . -B build-x32 -DCMAKE_C_FLAGS=-mx32
           cmake --build build-x32
+          nm build-x32/libmx25519.a > symbols.txt
+          if grep 'mx25519_scalarmult_amd64' symbols.txt; then exit 1; fi
+
+      - name: Backend selection (configure only)
+        run: |
+          check() {
+            cmake -S . -B "build-sel-$1" -DCMAKE_C_COMPILER=clang -DCMAKE_C_COMPILER_TARGET="$1" \
+              -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY > "build-sel-$1.log"
+            grep -F "Assembly sources: $2" "build-sel-$1.log"
+          }
+          check x86_64-linux-gnu "AMD64 ON, ARM64 OFF"
+          check aarch64-linux-gnu "AMD64 OFF, ARM64 ON"
+          check aarch64_be-linux-gnu "AMD64 OFF, ARM64 OFF"
+          check x86_64-linux-gnux32 "AMD64 OFF, ARM64 OFF"
+          check arm64_32-apple-watchos "AMD64 OFF, ARM64 OFF"
 
       - name: Build & test (sanitizers)
         run: |
@@ -118,10 +133,10 @@ jobs:
           if arch -x86_64 /usr/bin/true 2>/dev/null; then
             arch -x86_64 ./build-universal/mx25519-tests
           fi
-          nm -arch arm64 build-universal/libmx25519.a > symbols-arm64.txt
-          nm -arch x86_64 build-universal/libmx25519.a > symbols-x86_64.txt
-          grep 'T _mx25519_scalarmult_arm64' symbols-arm64.txt
-          grep 'T _mx25519_scalarmult_amd64x' symbols-x86_64.txt
+          nm -arch arm64 build-universal/mx25519-tests > symbols-arm64.txt
+          nm -arch x86_64 build-universal/mx25519-tests > symbols-x86_64.txt
+          grep '_mx25519_scalarmult_arm64' symbols-arm64.txt
+          grep '_mx25519_scalarmult_amd64x' symbols-x86_64.txt
 
   windows-msvc:
     name: Windows (MSVC)

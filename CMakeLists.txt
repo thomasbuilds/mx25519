@@ -43,9 +43,12 @@ endif()
 
 # Assembly backends. src/backends.h decides from the compiler's predefined
 # macros which backend the C code calls, and the GNU assembly sources include
-# it and assemble to nothing where it says no. CMake compiles the same header
-# with the same compiler and flags to choose the sources to build. A source
-# left out is reported to the C code, which then uses the portable backend.
+# it and assemble to nothing where it says no. CMake compiles the same header,
+# with the toolchain settings and CMAKE_C_FLAGS, to choose the sources to
+# build. A source left out is reported to the C code, which then uses the
+# portable backend, so options the check does not see (per-configuration
+# flags, a parent project's add_compile_options) can cost speed but cannot
+# break the build.
 include(CheckCSourceCompiles)
 include(CMakePushCheckState)
 
@@ -65,7 +68,7 @@ function(mx25519_check_impl impl result)
 int main(void) { return 0; }" ${result})
 endfunction()
 
-set(mx25519_definitions)
+set(mx25519_definitions "")
 set(mx25519_asm_amd64 OFF)
 set(mx25519_asm_arm64 OFF)
 if(NOT MX25519_COPYLEFT)
@@ -77,20 +80,22 @@ else()
     # each architecture compiles both sources and assembles only its own
     set(mx25519_asm_amd64 ON)
     set(mx25519_asm_arm64 ON)
+    message(STATUS "Assembly sources: both, each architecture uses its own")
   else()
     mx25519_check_impl(IMPL_AMD64 MX25519_HAVE_IMPL_AMD64)
     if(MX25519_HAVE_IMPL_AMD64)
       set(mx25519_asm_amd64 ON)
     endif()
     # cl cannot assemble the GNU source, and Visual Studio compiles it as C
-    if(NOT MSVC)
+    if(NOT MSVC OR (CMAKE_C_COMPILER_ID STREQUAL "Clang"
+        AND NOT CMAKE_GENERATOR MATCHES "^Visual Studio"))
       mx25519_check_impl(IMPL_ARM64 MX25519_HAVE_IMPL_ARM64)
       if(MX25519_HAVE_IMPL_ARM64)
         set(mx25519_asm_arm64 ON)
       endif()
     endif()
+    message(STATUS "Assembly sources: AMD64 ${mx25519_asm_amd64}, ARM64 ${mx25519_asm_arm64}")
   endif()
-  message(STATUS "Assembly sources: AMD64 ${mx25519_asm_amd64}, ARM64 ${mx25519_asm_arm64}")
 
   if(mx25519_asm_amd64)
     if(MSVC)

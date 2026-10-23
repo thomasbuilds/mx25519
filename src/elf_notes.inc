@@ -1,4 +1,4 @@
-/* Copyright (c) 2022-2026 tevador <tevador@gmail.com>
+/* Copyright (c) 2026 tevador <tevador@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
  * They declare what an empty C file compiled with the same options declares:
  * a non-executable stack, and the control-flow protection (CET on x86; BTI,
  * PAC and GCS on AArch64) that the linker keeps only if every object has it.
+ * A source that does assemble declares only what its own code implements.
  */
 
 #if defined(__ELF__)
