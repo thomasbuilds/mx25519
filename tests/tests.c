@@ -21,8 +21,19 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) \
+    && (defined(__linux__) || defined(__APPLE__))
+#define TEST_DIT
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#else
+#include <sys/auxv.h>
+#endif
+#endif
 
 typedef bool test_func();
 static int test_no = 0;
@@ -592,6 +603,53 @@ static bool test_select_portable() {
     return true;
 }
 
+#if defined(TEST_DIT)
+static bool cpu_has_dit() {
+#if defined(__APPLE__)
+    int dit = 0;
+    size_t size = sizeof(dit);
+    return sysctlbyname("hw.optional.arm.FEAT_DIT", &dit, &size, NULL, 0) == 0
+        && dit != 0;
+#else
+    return (getauxval(AT_HWCAP) & (1UL << 24)) != 0; /* HWCAP_DIT */
+#endif
+}
+
+static uint64_t get_dit() {
+    uint64_t dit;
+    __asm__ volatile("mrs %0, s3_3_c4_c2_5" : "=r"(dit));
+    return dit;
+}
+
+static void set_dit(uint64_t dit) {
+    __asm__ volatile("msr s3_3_c4_c2_5, %0" : : "r"(dit));
+}
+#endif
+
+/* the library sets PSTATE.DIT while it computes and must give the caller's
+   setting back, whether it was off or on */
+static bool check_dit() {
+#if defined(TEST_DIT)
+    const uint64_t dit_on = (uint64_t)1 << 24;
+    mx25519_privkey key = { { 9 } };
+    mx25519_pubkey result;
+    if (!cpu_has_dit()) {
+        return false;
+    }
+    uint64_t saved = get_dit();
+    set_dit(0);
+    mx25519_scmul_base_unclamped(impl, &result, &key);
+    assert(get_dit() == 0);
+    set_dit(dit_on);
+    mx25519_scmul_base_unclamped(impl, &result, &key);
+    assert(get_dit() == dit_on);
+    set_dit(saved);
+    return true;
+#else
+    return false;
+#endif
+}
+
 static bool test_type_portable() {
     mx25519_type type = mx25519_impl_type(impl);
     assert(type == MX25519_TYPE_PORTABLE);
@@ -611,6 +669,10 @@ static bool test_dh_portable() {
 static bool test_mul_base_times1_portable() {
     check_mul_base_times1();
     return true;
+}
+
+static bool test_dit_portable() {
+    return check_dit();
 }
 
 static bool test_select_arm64() {
@@ -649,6 +711,13 @@ static bool test_mul_base_times1_arm64() {
     }
     check_mul_base_times1();
     return true;
+}
+
+static bool test_dit_arm64() {
+    if (impl == NULL) {
+        return false;
+    }
+    return check_dit();
 }
 
 static bool test_select_amd64() {
@@ -734,11 +803,13 @@ int main() {
     RUN_TEST(test_scmul_portable);
     RUN_TEST(test_dh_portable);
     RUN_TEST(test_mul_base_times1_portable);
+    RUN_TEST(test_dit_portable);
     RUN_TEST(test_select_arm64);
     RUN_TEST(test_type_arm64);
     RUN_TEST(test_scmul_arm64);
     RUN_TEST(test_dh_arm64);
     RUN_TEST(test_mul_base_times1_arm64);
+    RUN_TEST(test_dit_arm64);
     RUN_TEST(test_select_amd64);
     RUN_TEST(test_type_amd64);
     RUN_TEST(test_scmul_amd64);

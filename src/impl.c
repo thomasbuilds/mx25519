@@ -63,3 +63,57 @@ const mx25519_impl* const mx25519_impls[4] = {
     &impl_amd64,
     &impl_amd64x,
 };
+
+#if defined(PLATFORM_DIT)
+/* With PSTATE.DIT set, the CPU guarantees that the timing of the data
+   processing instructions does not depend on the values they process. The
+   caller's setting is restored afterwards. Only for CPUs with FEAT_DIT: on
+   others, these instructions are undefined. */
+static uint64_t dit_enable(void) {
+    uint64_t dit;
+    __asm__ volatile("mrs %0, s3_3_c4_c2_5" : "=r"(dit) : : "memory");
+    __asm__ volatile(".inst 0xd503415f" : : : "memory"); /* msr dit, #1 */
+    return dit;
+}
+
+static void dit_restore(uint64_t dit) {
+    __asm__ volatile("msr s3_3_c4_c2_5, %0" : : "r"(dit) : "memory");
+}
+
+static void scalarmult_portable_dit(uint8_t* q, const uint8_t* n,
+    const uint8_t* p)
+{
+    uint64_t dit = dit_enable();
+    mx25519_scalarmult_portable(q, n, p);
+    dit_restore(dit);
+}
+
+static const mx25519_impl impl_portable_dit = {
+    .scmul = &scalarmult_portable_dit,
+    .type = MX25519_TYPE_PORTABLE
+};
+
+#if defined(IMPL_ARM64)
+static void scalarmult_arm64_dit(uint8_t* q, const uint8_t* n,
+    const uint8_t* p)
+{
+    uint64_t dit = dit_enable();
+    mx25519_scalarmult_arm64(q, n, p);
+    dit_restore(dit);
+}
+#endif
+
+static const mx25519_impl impl_arm64_dit = {
+#if defined(IMPL_ARM64)
+    .scmul = &scalarmult_arm64_dit,
+#else
+    .scmul = NULL,
+#endif
+    .type = MX25519_TYPE_ARM64
+};
+
+const mx25519_impl* const mx25519_impls_dit[2] = {
+    &impl_portable_dit,
+    &impl_arm64_dit,
+};
+#endif

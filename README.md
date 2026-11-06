@@ -51,6 +51,8 @@ The assembly implementations have been verified to be constant-time with respect
 
 The portable C implementation makes a best-effort attempt to be constant-time with respect to secret values and to wipe all secrets from the stack. These properties ultimately depend on the compiler.
 
+On AArch64 CPUs with Data Independent Timing (FEAT_DIT), the library sets PSTATE.DIT while it computes and then restores the caller's setting. This needs Linux, Android or an Apple platform, which report whether the CPU has the feature.
+
 ## License
 
 The optimized assembly backends are licensed under the [Mozilla Public License 2.0](LICENSE-MPL). Everything else, including the portable implementation, is licensed under the [Apache License 2.0](LICENSE-APACHE). Each source file carries the notice of the license that applies to it.

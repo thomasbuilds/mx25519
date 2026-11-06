@@ -22,6 +22,13 @@
 #define PLATFORM_WIN
 #endif
 
+/* AArch64 with GNU-style inline assembly, on a system that can tell whether
+   the CPU has Data Independent Timing (FEAT_DIT) */
+#if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) \
+    && (defined(__linux__) || defined(__APPLE__))
+#define PLATFORM_DIT
+#endif
+
 #if defined(_M_IX86) || defined(__i386)
 #define PLATFORM_X86
 #elif (defined(_M_X64) || defined(__x86_64__)) \
