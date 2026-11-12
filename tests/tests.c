@@ -24,6 +24,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(__aarch64__) && (defined(__linux__) || defined(__APPLE__))
+#define TEST_DIT
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#else
+#include <sys/auxv.h>
+#endif
+#endif
+
 typedef bool test_func();
 static int test_no = 0;
 
@@ -580,6 +589,34 @@ static void check_mul_base_times1() {
     assert(memcmp(&B1, &B, sizeof(B)) == 0);
 }
 
+static bool check_dit() {
+#if defined(TEST_DIT)
+#if defined(__APPLE__)
+    int dit = 0;
+    size_t size = sizeof(dit);
+    if (sysctlbyname("hw.optional.arm.FEAT_DIT", &dit, &size, NULL, 0) != 0
+        || !dit) {
+        return false;
+    }
+#else
+    if (!(getauxval(AT_HWCAP) & (1 << 24))) {
+        return false;
+    }
+#endif
+    const uint64_t states[] = { (uint64_t)1 << 24, 0 };
+    for (int i = 0; i < 2; ++i) {
+        uint64_t state;
+        __asm__ volatile("msr s3_3_c4_c2_5, %0" : : "r"(states[i]) : "memory");
+        check_mul_base_times1();
+        __asm__ volatile("mrs %0, s3_3_c4_c2_5" : "=r"(state) : : "memory");
+        assert(state == states[i]);
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
 static bool test_select_auto() {
     impl = mx25519_select_impl(MX25519_TYPE_AUTO);
     assert(impl != NULL);
@@ -611,6 +648,10 @@ static bool test_dh_portable() {
 static bool test_mul_base_times1_portable() {
     check_mul_base_times1();
     return true;
+}
+
+static bool test_dit_portable() {
+    return check_dit();
 }
 
 static bool test_select_arm64() {
@@ -649,6 +690,13 @@ static bool test_mul_base_times1_arm64() {
     }
     check_mul_base_times1();
     return true;
+}
+
+static bool test_dit_arm64() {
+    if (impl == NULL) {
+        return false;
+    }
+    return check_dit();
 }
 
 static bool test_select_amd64() {
@@ -734,11 +782,13 @@ int main() {
     RUN_TEST(test_scmul_portable);
     RUN_TEST(test_dh_portable);
     RUN_TEST(test_mul_base_times1_portable);
+    RUN_TEST(test_dit_portable);
     RUN_TEST(test_select_arm64);
     RUN_TEST(test_type_arm64);
     RUN_TEST(test_scmul_arm64);
     RUN_TEST(test_dh_arm64);
     RUN_TEST(test_mul_base_times1_arm64);
+    RUN_TEST(test_dit_arm64);
     RUN_TEST(test_select_amd64);
     RUN_TEST(test_type_amd64);
     RUN_TEST(test_scmul_amd64);

@@ -35,6 +35,12 @@ static uint32_t xgetbv0(void) {
 #endif
 #endif
 
+#if defined(PLATFORM_DIT) && defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(PLATFORM_DIT)
+#include <sys/auxv.h>
+#endif
+
 x25519_cpu_cap mx25519_get_cpu_cap() {
     x25519_cpu_cap cap = 0;
 #ifdef HAVE_CPUID
@@ -62,6 +68,18 @@ x25519_cpu_cap mx25519_get_cpu_cap() {
         if (info[1] & (1 << 19)) {
             cap |= X25519_CPU_CAP_ADX;
         }
+    }
+#endif
+#if defined(PLATFORM_DIT) && defined(__APPLE__)
+    int dit = 0;
+    size_t size = sizeof(dit);
+    if (sysctlbyname("hw.optional.arm.FEAT_DIT", &dit, &size, NULL, 0) == 0
+        && dit) {
+        cap |= X25519_CPU_CAP_DIT;
+    }
+#elif defined(PLATFORM_DIT)
+    if (getauxval(AT_HWCAP) & (1 << 24)) {
+        cap |= X25519_CPU_CAP_DIT;
     }
 #endif
     return cap;
