@@ -28,7 +28,7 @@ jobs:
 
       - name: Select tree
         run: |
-          if [ "${{ matrix.tree }}" = master ]; then ref=bcc564a5e1c2cde1b659b843ae1bfe695e663b61; else ref=$(git rev-parse HEAD~1); fi
+          if [ "${{ matrix.tree }}" = master ]; then ref=bcc564a5e1c2cde1b659b843ae1bfe695e663b61; else ref=$(git rev-parse origin/arm64/dit); fi
           git worktree add ../tree "$ref"
           git -C ../tree log -1 --format='tree under test: %H %s'
           cp .github/dit-check/dithar.c ../dithar.c
