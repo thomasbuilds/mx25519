@@ -1,0 +1,57 @@
+name: Diagnose 386 DNS
+
+on:
+  push:
+    branches: [ ci/dit-check ]
+
+permissions:
+  contents: read
+
+jobs:
+  dns:
+    name: DNS inside containers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Host
+        run: |
+          uname -a
+          grep PRETTY /etc/os-release
+          docker version --format 'docker {{.Server.Version}}'
+          cat /etc/resolv.conf | grep -v '^#'
+      - name: Resolve deb.debian.org from containers
+        run: |
+          try() { echo "== $*"; docker run --rm "$@" bash -c 'getent hosts deb.debian.org && echo RESOLVED || echo "NOT RESOLVED"' 2>&1 | tail -3; }
+          try --platform=linux/amd64 debian:stable
+          try --platform=linux/386 debian:stable
+          try --platform=linux/386 debian:bookworm
+          try --platform=linux/386 --dns 8.8.8.8 debian:stable
+          try --platform=linux/386 --network host debian:stable
+
+  master-386:
+    name: Upstream master bcc564a, Linux (386), unchanged
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: bcc564a5e1c2cde1b659b843ae1bfe695e663b61
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Build & test
+        run: |
+          docker run --rm \
+            --platform=linux/386 \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -v "$PWD:/src" \
+            -w /src \
+            debian:stable \
+            bash -c "
+              apt-get update &&
+              apt-get install -y --no-install-recommends \
+                build-essential cmake &&
+              cmake -S . -B build &&
+              cmake --build build &&
+              ./build/mx25519-tests
+            "
