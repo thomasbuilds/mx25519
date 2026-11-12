@@ -8,32 +8,13 @@ permissions:
   contents: read
 
 jobs:
-  dns:
-    name: DNS inside containers
-    runs-on: ubuntu-latest
-    steps:
-      - name: Host
-        run: |
-          uname -a
-          grep PRETTY /etc/os-release
-          docker version --format 'docker {{.Server.Version}}'
-          cat /etc/resolv.conf | grep -v '^#'
-      - name: Resolve deb.debian.org from containers
-        run: |
-          try() { echo "== $*"; docker run --rm "$@" bash -c 'getent hosts deb.debian.org && echo RESOLVED || echo "NOT RESOLVED"' 2>&1 | tail -3; }
-          try --platform=linux/amd64 debian:stable
-          try --platform=linux/386 debian:stable
-          try --platform=linux/386 debian:bookworm
-          try --platform=linux/386 --dns 8.8.8.8 debian:stable
-          try --platform=linux/386 --network host debian:stable
-
-  master-386:
-    name: Upstream master bcc564a, Linux (386), unchanged
-    runs-on: ubuntu-latest
+  ubuntu-2404:
+    name: Option 1 - upstream 386 job on ubuntu-24.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: bcc564a5e1c2cde1b659b843ae1bfe695e663b61
+          ref: arm64/dit
           persist-credentials: false
 
       - name: Set up QEMU
@@ -41,6 +22,7 @@ jobs:
 
       - name: Build & test
         run: |
+          uname -r; grep PRETTY /etc/os-release
           docker run --rm \
             --platform=linux/386 \
             -e DEBIAN_FRONTEND=noninteractive \
@@ -48,10 +30,37 @@ jobs:
             -w /src \
             debian:stable \
             bash -c "
-              apt-get update &&
+              apt-get update > /dev/null &&
               apt-get install -y --no-install-recommends \
-                build-essential cmake &&
-              cmake -S . -B build &&
-              cmake --build build &&
+                build-essential cmake > /dev/null &&
+              cmake -S . -B build > /dev/null &&
+              cmake --build build > /dev/null &&
               ./build/mx25519-tests
             "
+
+  host-m32:
+    name: Option 2 - 386 build with -m32 on ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: arm64/dit
+          persist-credentials: false
+
+      - name: Install multilib
+        run: |
+          sudo apt-get update > /dev/null
+          sudo apt-get install -y --no-install-recommends gcc-multilib > /dev/null
+          gcc --version | head -1
+
+      - name: Is 32-bit DNS broken on the host too?
+        run: |
+          printf '#include <netdb.h>\n#include <stdio.h>\nint main(void){struct addrinfo *r;int e=getaddrinfo("deb.debian.org","80",0,&r);printf("32-bit getaddrinfo: %%s\\n",e?gai_strerror(e):"ok");return 0;}\n' > dns.c
+          gcc -m32 dns.c -o dns32 && file dns32 && ./dns32
+
+      - name: Build & test (-m32)
+        run: |
+          cmake -S . -B build32 -DCMAKE_C_FLAGS=-m32 > /dev/null
+          cmake --build build32 > /dev/null
+          file build32/mx25519-tests
+          ./build32/mx25519-tests
