@@ -9,36 +9,17 @@ permissions:
 
 jobs:
   msvc:
-    name: MSVC ${{ matrix.arch }} (copyleft ${{ matrix.copyleft }})
-    runs-on: ${{ matrix.arch == 'ARM64' && 'windows-11-arm' || 'windows-latest' }}
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [ ARM64, Win32 ]
-        copyleft: [ ON, OFF ]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: bcc564a5e1c2cde1b659b843ae1bfe695e663b61
-          persist-credentials: false
-
-      - name: Environment
-        run: |
-          cmake --version
-          echo "PROCESSOR_ARCHITECTURE=$env:PROCESSOR_ARCHITECTURE"
-
-      - name: Configure
-        run: cmake -S . -B build -A ${{ matrix.arch }} -DMX25519_COPYLEFT=${{ matrix.copyleft }}
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Run tests
-        run: .\build\Release\mx25519-tests.exe
-
-  msvc-arm64-default:
-    name: MSVC on windows-11-arm, default platform
-    runs-on: windows-11-arm
+        include:
+          - { name: "x64 host -> ARM64 (cl)", os: windows-latest, args: "-A ARM64", run: false }
+          - { name: "x64 host -> ARM64 (cl, copyleft off)", os: windows-latest, args: "-A ARM64 -DMX25519_COPYLEFT=OFF", run: false }
+          - { name: "ARM64 ClangCL", os: windows-11-arm, args: "-A ARM64 -T ClangCL", run: true }
+          - { name: "ARM64 ClangCL (copyleft off)", os: windows-11-arm, args: "-A ARM64 -T ClangCL -DMX25519_COPYLEFT=OFF", run: true }
+          - { name: "x64 (cl, copyleft off)", os: windows-latest, args: "-A x64 -DMX25519_COPYLEFT=OFF", run: true }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,12 +27,11 @@ jobs:
           persist-credentials: false
 
       - name: Configure
-        run: |
-          cmake -S . -B build
-          Select-String -Path build\CMakeCache.txt -Pattern '^CMAKE_GENERATOR_PLATFORM|^CMAKE_SYSTEM_PROCESSOR|^CMAKE_C_COMPILER:'
+        run: cmake -S . -B build ${{ matrix.args }}
 
       - name: Build
         run: cmake --build build --config Release
 
       - name: Run tests
+        if: ${{ matrix.run }}
         run: .\build\Release\mx25519-tests.exe
